@@ -3,14 +3,16 @@ import { onMounted, ref } from 'vue'
 import { api } from '../api'
 const viols = ref<any[]>([])
 const unplaced = ref<any[]>([])
+const sealed = ref(false)
 onMounted(async () => {
   const res = await api('/seating/violations?hall_id=1')
-  viols.value = res.violations; unplaced.value = res.unplaced
+  viols.value = res.violations; unplaced.value = res.unplaced; sealed.value = !!res.sealed
 })
 </script>
 <template>
   <h1>违规</h1>
   <p class="sub">间距不足或同试卷四邻相邻</p>
+  <p v-if="sealed" class="hs-banner">考室已封场 · 当前为封场快照（只读）</p>
   <div class="card">
     <table>
       <thead><tr><th>类型</th><th>考生A</th><th>考生B</th><th>说明</th></tr></thead>

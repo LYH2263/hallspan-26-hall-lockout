@@ -4,8 +4,12 @@ import { api } from '../api'
 const data = ref<any>(null)
 const candidates = ref<any[]>([])
 const violKeys = ref<Set<string>>(new Set())
-async function run() {
-  data.value = await api('/seating/run?hall_id=1', { method: 'POST' })
+const err = ref('')
+function fmt(e: any) {
+  try { return JSON.parse(e.message).detail } catch { return e.message || '请求失败' }
+}
+async function load() {
+  data.value = await api('/seating/latest?hall_id=1')
   try {
     const v = await api('/seating/violations?hall_id=1')
     const keys = new Set<string>()
@@ -16,10 +20,18 @@ async function run() {
     violKeys.value = keys
   } catch { violKeys.value = new Set() }
 }
+async function run() {
+  err.value = ''
+  try {
+    await api('/seating/run?hall_id=1', { method: 'POST' })
+    await load()
+  } catch (e: any) { err.value = fmt(e) }
+}
 onMounted(async () => {
   candidates.value = await api('/candidates')
-  await run()
+  await load()
 })
+const sealed = computed(() => !!data.value?.hall?.sealed)
 const gridStyle = computed(() => data.value ? ({ gridTemplateColumns: `repeat(${data.value.cols}, 72px)` }) : {})
 const cells = computed(() => {
   if (!data.value) return []
@@ -45,7 +57,14 @@ function paperClass(pid: number) {
 <template>
   <h1>考场课桌网格</h1>
   <p class="sub">课桌网格为主视图 · 左侧考生名册夹板 · 违规课桌高亮</p>
-  <button class="btn" @click="run">重新排座</button>
+  <p v-if="sealed" class="hs-banner">
+    考室已封场 · 当前为封场快照（只读）· 封场当时最小间距 {{ data.hall.min_manhattan }}
+    <template v-if="data.hall.pending_min_manhattan != null && data.hall.pending_min_manhattan !== data.hall.min_manhattan">
+      · 待生效间距 {{ data.hall.pending_min_manhattan }}（解封后生效）
+    </template>
+  </p>
+  <p v-if="err" class="badge badge-bad">{{ err }}</p>
+  <button class="btn" :disabled="sealed" @click="run">重新排座</button>
   <div class="hs-classroom" style="margin-top:0.85rem">
     <aside class="hs-clipboard">
       <h2>考生名册</h2>

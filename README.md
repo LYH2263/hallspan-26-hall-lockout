@@ -26,6 +26,18 @@ docker compose up --build
 3. 在「违规」查看间距或同卷相邻问题。
 4. 在「统计」查看占用与违规汇总。
 
+## 封场
+
+在「考室」页对已有排座方案的考室执行封场（空考室从未排过座，不允许封场）。封场时三处在同一事务同时落下：
+
+- **写入口闸**：封场期间 `POST /api/seating/run` 等一切生成新方案入口返回 409，方案条数不变；
+- **封场快照仓**：封场当时的排座图、违规、统计整体写入 `seal_snapshots`，之后只读，解封与再排均不改写；
+- **待生效配置**：封场期间修改最小间距只进待生效配置（`pending_min_manhattan`），不改快照、不出新方案。
+
+解封（`POST /api/halls/{id}/unseal`）后待生效配置生效，才允许重新排座；新方案按解封当下的约束出图。「封场禁写」与「解封才可写」互斥：重复封场、未封解封均返回 409。
+
+相关接口：`POST /api/halls/{id}/seal`、`POST /api/halls/{id}/unseal`、`PATCH /api/halls/{id}`、`GET /api/halls/{id}/snapshot`。
+
 ## 开发与测试
 
 ```bash

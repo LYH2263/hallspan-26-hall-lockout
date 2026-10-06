@@ -172,6 +172,14 @@ th { color: var(--hs-muted); font-weight: 700; font-size: 0.78rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .muted { color: var(--hs-muted); }
 .stat { font-size: 1.5rem; font-weight: 800; font-family: "Segoe UI", "PingFang SC", sans-serif; }
+.hs-banner {
+  display: inline-block;
+  padding: 0.35rem 0.7rem; margin: 0 0 0.6rem;
+  background: rgba(192,57,43,0.12); color: var(--hs-bad);
+  border: 1px solid rgba(192,57,43,0.45); border-radius: 2px;
+  font-size: 0.8rem; font-weight: 700;
+  font-family: "Segoe UI", "PingFang SC", sans-serif;
+}
 
 .grid-board { display: inline-grid; gap: 4px; padding: 0.5rem; background: rgba(255,255,255,0.3); border: 1px solid var(--hs-line); }
 .seat {

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api.router import api_router
 from app.config import settings
@@ -12,6 +13,11 @@ from app.services.seed import seed_if_empty
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # 轻量迁移：老库补封场相关列（create_all 只建新表不加列）
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE halls ADD COLUMN IF NOT EXISTS sealed BOOLEAN NOT NULL DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE halls ADD COLUMN IF NOT EXISTS pending_min_manhattan INTEGER"))
     if settings.seed_on_empty:
         db = SessionLocal()
         try:
