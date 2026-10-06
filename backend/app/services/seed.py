@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.models import Candidate, Hall, PaperSet
+from app.services.seating_service import generate_plan
 
 def seed_if_empty(db: Session) -> None:
     if (db.scalar(select(func.count()).select_from(Hall)) or 0) > 0:
@@ -18,3 +19,5 @@ def seed_if_empty(db: Session) -> None:
         db.add(Candidate(hall_id=hall.id, name=name, ticket_no=f"T{2026001+i}",
                          paper_id=paper_ids[i % len(paper_ids)]))
     db.commit()
+    # 种子排完再封场：预置一份初始排座方案
+    generate_plan(db, hall)

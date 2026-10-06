@@ -1,41 +1,81 @@
 import json
-from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app.models.models import Candidate, Hall, SeatPlan
-from app.services.seat_engine import find_violations, place_candidates, plan_to_dict
+from app.models.models import Hall
+from app.services import seating_service as svc
+
 router = APIRouter(prefix="/seating", tags=["seating"])
+
 
 @router.post("/run")
 def run_seating(hall_id: int = 1, db: Session = Depends(get_db)):
-    hall = db.get(Hall, hall_id)
-    if not hall: raise HTTPException(404, "考室不存在")
-    cands = [{"id": c.id, "name": c.name, "ticket_no": c.ticket_no, "paper_id": c.paper_id}
-             for c in db.scalars(select(Candidate).where(Candidate.hall_id == hall_id)).all()]
-    assigns, unplaced = place_candidates(hall.rows, hall.cols, hall.min_manhattan, cands)
-    viols = find_violations(hall.rows, hall.cols, hall.min_manhattan, assigns)
-    result = plan_to_dict(assigns, unplaced, viols, hall.rows, hall.cols)
-    result["hall"] = {"id": hall.id, "name": hall.name, "min_manhattan": hall.min_manhattan}
-    plan = SeatPlan(hall_id=hall_id, created_at=datetime.utcnow(), result_json=json.dumps(result, ensure_ascii=False))
-    db.add(plan); db.commit(); db.refresh(plan)
-    return {"id": plan.id, **result}
+    hall = svc._lock_hall(db, hall_id)
+    if hall.is_sealed:
+        raise HTTPException(409, "考室已封场，禁止重新排座")
+    return svc.generate_plan(db, hall)
+
 
 @router.get("/latest")
 def latest(hall_id: int = 1, db: Session = Depends(get_db)):
-    plan = db.scalars(select(SeatPlan).where(SeatPlan.hall_id == hall_id).order_by(SeatPlan.id.desc())).first()
-    if not plan:
-        return run_seating(hall_id=hall_id, db=db)
-    data = json.loads(plan.result_json)
-    return {"id": plan.id, **data}
+    hall = svc._get_hall_or_404(db, hall_id)
+    data = svc.read_active_plan(db, hall)
+    if data is None:
+        # 仅未封场且尚无方案时保留原有的懒生成兜底
+        return svc.generate_plan(db, hall)
+    return data
+
 
 @router.get("/violations")
 def violations(hall_id: int = 1, db: Session = Depends(get_db)):
-    data = latest(hall_id=hall_id, db=db)
-    return {"hall_id": hall_id, "violations": data.get("violations", []), "unplaced": data.get("unplaced", [])}
+    hall = svc._get_hall_or_404(db, hall_id)
+    data = svc.read_active_plan(db, hall)
+    if data is None:
+        data = svc.generate_plan(db, hall)
+    return {
+        "hall_id": hall_id,
+        "violations": data.get("violations", []),
+        "unplaced": data.get("unplaced", []),
+        "snapshot": bool(data.get("snapshot")),
+    }
+
 
 @router.get("/stats")
 def stats(hall_id: int = 1, db: Session = Depends(get_db)):
-    data = latest(hall_id=hall_id, db=db)
-    return {"hall_id": hall_id, **data.get("stats", {})}
+    hall = svc._get_hall_or_404(db, hall_id)
+    data = svc.read_active_plan(db, hall)
+    if data is None:
+        data = svc.generate_plan(db, hall)
+    return {"hall_id": hall_id, **data.get("stats", {}), "snapshot": bool(data.get("snapshot"))}
+
+
+@router.post("/seal")
+def seal(hall_id: int = 1, db: Session = Depends(get_db)):
+    return svc.seal_hall(db, hall_id)
+
+
+@router.post("/unseal")
+def unseal(hall_id: int = 1, db: Session = Depends(get_db)):
+    return svc.unseal_hall(db, hall_id)
+
+
+@router.post("/config")
+def config(min_manhattan: int, hall_id: int = 1, db: Session = Depends(get_db)):
+    return svc.stage_or_apply_distance(db, hall_id, min_manhattan)
+
+
+@router.get("/snapshot/latest")
+def latest_snapshot(hall_id: int = 1, db: Session = Depends(get_db)):
+    hall = svc._get_hall_or_404(db, hall_id)
+    snap = svc.latest_snapshot(db, hall.id)
+    if snap is None:
+        raise HTTPException(404, "该考室暂无封场快照")
+    return {
+        "id": snap.id,
+        "hall_id": snap.hall_id,
+        "seat_plan_id": snap.seat_plan_id,
+        "sealed_at": snap.sealed_at.isoformat() if snap.sealed_at else None,
+        **json.loads(snap.result_json),
+    }

@@ -7,5 +7,14 @@ router = APIRouter(prefix="/halls", tags=["halls"])
 
 @router.get("")
 def list_halls(db: Session = Depends(get_db)):
-    return [{"id": r.id, "code": r.code, "name": r.name, "rows": r.rows, "cols": r.cols, "min_manhattan": r.min_manhattan}
-            for r in db.scalars(select(Hall).order_by(Hall.id)).all()]
+    return [{
+        "id": r.id,
+        "code": r.code,
+        "name": r.name,
+        "rows": r.rows,
+        "cols": r.cols,
+        "min_manhattan": r.min_manhattan,
+        "is_sealed": r.is_sealed,
+        "pending_min_manhattan": r.pending_min_manhattan,
+        "sealed_at": r.sealed_at.isoformat() if r.sealed_at else None,
+    } for r in db.scalars(select(Hall).order_by(Hall.id)).all()]

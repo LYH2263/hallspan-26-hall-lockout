@@ -1,2 +1,2 @@
-from app.models.models import Candidate, Hall, PaperSet, SeatPlan
-__all__ = ["Hall", "Candidate", "PaperSet", "SeatPlan"]
+from app.models.models import Candidate, Hall, HallSnapshot, PaperSet, SeatPlan
+__all__ = ["Hall", "Candidate", "PaperSet", "SeatPlan", "HallSnapshot"]
